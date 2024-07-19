@@ -22,8 +22,10 @@ class Client:
             print('You have connected to the chat!')            
         except Exception as e:
             print(f'Error {e} while connecting to server')
-        recieve_messages = threading.Thread(target=self.recieve_messages).start()
-        broadcast = threading.Thread(target=self.broadcast).start()
+        recieve_messages = threading.Thread(target=self.recieve_messages)
+        broadcast = threading.Thread(target=self.broadcast)
+        recieve_messages.start()
+        broadcast.start()
         
 
     def broadcast(self):
@@ -31,7 +33,6 @@ class Client:
             while True:
                 msg = input('You: ')
                 self.client_socket.send(msg.encode(self.encoder))
-                print(msg)
                 if msg.lower() == '\\quit':
                     print('Quitting chat.')
                     break
