@@ -6,14 +6,15 @@ import re
 class ChatServer:
 
     def __init__(self, host_port, host_ip = socket.gethostbyname(socket.gethostname()), 
-                 encoder = 'utf-8', bytesize = 1024, name = 'server'):
+                 encoder = 'utf-8', bytesize = 1024):
         self.host_port = host_port
         self.host_ip = host_ip
         self.encoder = encoder
         self.bytesize = bytesize
-        self.name = name
         self.clients_dict: dict = {}
         self.client_choice: dict = {}
+
+        self.start_server()
 
 
     def start_server(self):
@@ -42,7 +43,7 @@ class ChatServer:
             client_socket.send("Welcome to the chat server. Please enter your username (must contain only letters): ".encode(self.encoder))
             username = client_socket.recv(self.bytesize).decode(self.encoder)
 
-            while username in self.clients_dict or not username.isalpha() or username in ['info', 'members', 'quit', 'all', 'username']:
+            while username in self.clients_dict or not username.isalpha() or username.lower() in ['info', 'members', 'quit', 'all', 'username', 'you']:
                 client_socket.send("Username is already in use or not valid, enter another one: ".encode(self.encoder))
                 username = client_socket.recv(self.bytesize).decode(self.encoder)
 
@@ -50,7 +51,8 @@ class ChatServer:
             self.client_choice[username] = None
             client_socket.send("You are conneced to the chat!".encode(self.encoder))
             for client in self.clients_dict:
-                self.clients_dict[client].send(f"{username} has joined our chat! Everyone greet him!".encode(self.encoder))
+                if client != username:
+                    self.clients_dict[client].send(f"{username} has joined our chat! Everyone greet him!".encode(self.encoder))
             
             client_socket.send('''\\info for possible commands\n \\members for all chat members\n 
                             \\username to switch to DMs\n \\all switch to all chat\n \\quit quit chat'''.encode(self.encoder))
@@ -101,8 +103,7 @@ class ChatServer:
                             self.broadcast_message(msg, client_name)
                             del self.clients_dict[client_name]
                         case '\\info':
-                            client_socket.send('''\\info for possible commands\n \\members for all chat members\n 
-                                \\username to switch to DMs\n \\all switch to all chat\n \\quit quit chat'''.encode(self.encoder))
+                            client_socket.send('\\info for possible commands\n\\members for all chat members\n\\username to switch to DMs\n\\all switch to all chat\n\\quit quit chat'.encode(self.encoder))
                         case '\\members':
                             clients = ''
                             for client_name in self.clients_dict:
@@ -116,3 +117,7 @@ class ChatServer:
             del self.clients_dict[client_name]
             del self.client_choice[client_name]
             client_socket.close()
+
+
+if __name__ == '__main__':
+    chat_server = ChatServer(54321)
