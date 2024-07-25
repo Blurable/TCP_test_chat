@@ -1,6 +1,7 @@
 import socket
 import threading
 import re
+from client_connection import Connection
 
 
 class ChatServer:
@@ -32,31 +33,30 @@ class ChatServer:
             try:
                 client_socket, client_addr = server_socket.accept()
                 print(f"Accepted connection from {client_addr[0]}:{client_addr[1]}")
-                client_handler = threading.Thread(target=self.client_handler, args=(client_socket,))
+                client = Connection(client_socket)
+                client_handler = threading.Thread(target=self.client_handler, args=(client, ))
                 client_handler.start()
             except Exception as e:
                 print(f'Error {e} while accepting the client')
                 client_socket.close()
 
 
-    def client_handler(self, client_socket):
+    def client_handler(self, client: Connection):
         try:
-            client_socket.send("Welcome to the chat server. Please enter your username (must contain only letters): ".encode(self.encoder))
-            username = client_socket.recv(self.bytesize).decode(self.encoder)
-
-            while username in self.clients_dict or not username.isalpha() or username.lower() in ['info', 'members', 'quit', 'all', 'username', 'you']:
-                client_socket.send("Username is already in use or not valid, enter another one: ".encode(self.encoder))
-                username = client_socket.recv(self.bytesize).decode(self.encoder)
-            client_socket.send("You are conneced to the chat!".encode(self.encoder))
+            client.send("Welcome to the chat server. Please enter your username (must contain only letters): ")
+            username = client.recv()
 
             with self.clients_lock:
-                self.clients_dict[username] = client_socket
-                client_sockets = [value for value in self.clients_dict.values()]
+                usernames = list(self.clients_dict.keys())
 
-            for socket in client_sockets:
-                if socket != client_socket:
-                    socket.send(f"{username} has joined our chat! Everyone greet him!".encode(self.encoder))
-            client_socket.send('\n\\info for possible commands\n\\members for all chat members\n\\username to switch to DMs\n\\all switch to all chat\n\\quit quit chat'.encode(self.encoder))
+            while not username.isalpha() or username.lower() in ['info', 'members', 'quit', 'all', 'username', 'you'] or username in usernames:
+                client.send("Username is already in use or not valid, enter another one: ")
+                username = client.recv()
+            client.send("You are conneced to the chat!")
+
+            self.broadcast_message(f"{username} has joined our chat! Everyone greet him!")
+            self.broadcast_message('''\n\\info for possible commands\n\\members for all chat members\n\\username to switch to DMs
+                                   \\all switch to all chat\n\\quit quit chat''')
             
             self.recieve_message(username)
         except Exception as e:
