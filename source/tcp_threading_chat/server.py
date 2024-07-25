@@ -56,7 +56,8 @@ class ChatServer:
             for socket in client_sockets:
                 if socket != client_socket:
                     socket.send(f"{username} has joined our chat! Everyone greet him!".encode(self.encoder))
-            client_socket.send('\n\\info for possible commands\n\\members for all chat members\n\\username to switch to DMs\n\\all switch to all chat\n\\quit quit chat'.encode(self.encoder))
+            client_socket.send("\n\\info for possible commands\n\\members for all chat members\n"\
+                                    "\\username to switch to DMs\n\\all switch to all chat\n\\quit quit chat".encode(self.encoder))
             
             self.recieve_message(username)
         except Exception as e:
