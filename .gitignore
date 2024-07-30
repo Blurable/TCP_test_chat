@@ -2,3 +2,7 @@ test.py
 testt2.py
 test3.py
 source\tcp_thrading_chat\msg_protocol.py
+source\sockettest.egg-info
+source\echo_tests
+build
+pyproject.toml

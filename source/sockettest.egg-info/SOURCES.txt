@@ -1,0 +1,11 @@
+pyproject.toml
+setup.cfg
+setup.py
+source/echo_tests/tcp_client.py
+source/echo_tests/tcp_server.py
+source/echo_tests/udp_client.py
+source/echo_tests/udp_server.py
+source/sockettest.egg-info/PKG-INFO
+source/sockettest.egg-info/SOURCES.txt
+source/sockettest.egg-info/dependency_links.txt
+source/sockettest.egg-info/top_level.txt
