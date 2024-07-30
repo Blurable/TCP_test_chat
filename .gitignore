@@ -1,2 +1,7 @@
 test.py
 testt2.py
+build
+venv
+pyproject.toml
+setup.py
+setup.cfg
