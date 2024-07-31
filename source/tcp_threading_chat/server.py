@@ -2,7 +2,7 @@ import socket
 import threading
 import re
 from tcp_threading_chat.client_connection import Connection
-
+from tcp_threading_chat.client_dict import ThreadSafeDict
 
 class ChatServer:
 
@@ -11,8 +11,7 @@ class ChatServer:
         self.host_port = host_port
         self.host_ip = host_ip
         self.encoder = encoder
-        self.clients_dict: dict = {}
-        self.clients_lock = threading.Lock()
+        self.clients_dict: ThreadSafeDict = ThreadSafeDict()
 
         self.info = "\n\\info for possible commands\n\\members for all chat members\n"\
                     "\\username to switch to DMs\n\\all switch to all chat\n\\quit to quit chat"
@@ -47,11 +46,11 @@ class ChatServer:
             while True:
                 username = client.recv(1024).decode(self.encoder)
                 if username.isalpha() and username.lower() not in ['info', 'members', 'quit', 'all', 'username', 'you']:
-                    client = Connection(client, username)
-                    with self.clients_lock:
-                        if username not in self.clients_dict:
-                            self.clients_dict[username] = client
-                            break
+                    if not self.clients_dict[username]:
+                        client = Connection(client, username)
+                        self.clients_dict[username] = client
+                        print(username, 'has connected to the server', client.sock)
+                        break
                 client.send("Username is already in use or not valid, enter another one: ".encode(self.encoder))
             return client
         except Exception as e:
@@ -59,9 +58,7 @@ class ChatServer:
     
     
     def client_cleaner(self, client):
-        with self.clients_lock:
-            if client.username in self.clients_dict:
-                del self.clients_dict[client.username]
+        del self.clients_dict[client.username]
         client.close()
 
 
@@ -69,8 +66,7 @@ class ChatServer:
         try:
             client = self.authorize_client(client)
             self.send_message(self.info, [client])
-            with self.clients_lock:
-                clients = [connection for connection in self.clients_dict.values() if connection != client]
+            clients = [connection for connection in self.clients_dict.copy_values() if connection != client]
             self.send_message(f"{client.username} has joined our chat! Everyone greet him!", clients)
             
             self.receive_message(client)
@@ -101,25 +97,22 @@ class ChatServer:
                     case '\\info':
                         self.send_message(self.info, [client])
                     case '\\members':
-                        with self.clients_lock:
-                            client_names = list(self.clients_dict.keys())
+                        client_names = self.clients_dict.copy_keys()
                         msg = '\n'+'\n'.join(client_names)
                         self.send_message(msg, [client])
                     case '\\all':
                         receiver = None
                     case msg if re.fullmatch(r'\\[a-zA-Z]+', msg):
                         username = msg[1:]
-                        with self.clients_lock:
-                            if username != client.username and username in self.clients_dict.keys():
-                                receiver = self.clients_dict[username]
+                        if username != client.username:
+                            receiver = self.clients_dict[username]
                     case _:
                         if receiver:
                             msg = f'DM from {client.username}: {msg}'
                             self.send_message(msg, [receiver])
                         else:
-                            with self.clients_lock:
-                                msg = f'{client.username}: {msg}'            
-                                clients = list(self.clients_dict.values())
+                            msg = f'{client.username}: {msg}'            
+                            clients = self.clients_dict.copy_values()
                             self.send_message(msg, clients)
 
         except Exception as e:
