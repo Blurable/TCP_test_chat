@@ -4,6 +4,7 @@ test3.py
 source\tcp_thrading_chat\msg_protocol.py
 source\sockettest.egg-info
 source\echo_tests
+source\tcp_chat_test
 build
 pyproject.toml
 # Byte-compiled / optimized / DLL files
