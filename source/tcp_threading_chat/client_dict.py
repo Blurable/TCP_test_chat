@@ -11,7 +11,8 @@ class ThreadSafeDict(UserDict):
 
     def __delitem__(self, key: Any) -> None:
         with self.lock:
-            super().__delitem__(key)
+            if key in self.data:
+                super().__delitem__(key)
 
 
     def __setitem__(self, key: Any, value: Any) -> None:
