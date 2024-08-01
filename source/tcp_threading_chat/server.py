@@ -33,28 +33,25 @@ class ChatServer:
             try:
                 client_socket, client_addr = server_socket.accept()
                 print(f"Accepted connection from {client_addr[0]}:{client_addr[1]}")
-                client_handler = threading.Thread(target=self.client_handler, args=(client_socket, ))
-                client_handler.start()
+                client = Connection(client_socket, None)
+                threading.Thread(target=self.client_handler, args=(client, )).start()
             except Exception as e:
                 print(f'Error {e} while accepting the client')
                 client_socket.close()
 
 
-    def authorize_client(self, client: socket.socket):
-        try:
-            client.send("Welcome to the chat server. Please enter your username (must contain only letters): ".encode(self.encoder))
-            while True:
-                username = client.recv(1024).decode(self.encoder)
-                if username.isalpha() and username.lower() not in ['info', 'members', 'quit', 'all', 'username', 'you']:
-                    if not self.clients_dict[username]:
-                        client = Connection(client, username)
-                        self.clients_dict[username] = client
-                        print(username, 'has connected to the server', client.sock)
-                        break
-                client.send("Username is already in use or not valid, enter another one: ".encode(self.encoder))
-            return client
-        except Exception as e:
-            pass
+    def authorize_client(self, client: Connection):
+        client.send("Welcome to the chat server. Please enter your username (must contain only letters): ".encode(self.encoder))
+        while True:
+            username = client.recv(1024).decode(self.encoder)
+            if username.isalpha() and username.lower() not in ['info', 'members', 'quit', 'all', 'username', 'you']:
+                client.username = username
+                if self.clients_dict.add_if_not_exist(username, client):
+                    print(username, 'has connected to the server', client.sock)
+                    break
+            client.send("Username is already in use or not valid, enter another one: ".encode(self.encoder))
+        return client
+
     
     
     def client_cleaner(self, client):
@@ -65,6 +62,12 @@ class ChatServer:
     def client_handler(self, client: Connection):
         try:
             client = self.authorize_client(client)
+        except Exception as e:
+            print(f'Error {e} while authorizing the client')
+            client.close()
+            return
+        
+        try:
             self.send_message(self.info, [client])
             clients = [connection for connection in self.clients_dict.copy_values() if connection != client]
             self.send_message(f"{client.username} has joined our chat! Everyone greet him!", clients)
@@ -75,12 +78,13 @@ class ChatServer:
             self.client_cleaner(client)
             
 
-    def send_message(self, msg: str, clients: list[Connection]):
-        try:
-            for client in clients:
+    def broadcast_message(self, msg: str, clients: list[Connection]):
+        for client in clients:
+            try:
                 client.send(msg)
-        except Exception as e:
-            print(f'Error {e} while broadcasting a message')
+            except Exception as e:
+                print(f'Error {e} while broadcasting a message')
+                self.client_cleaner(client)
 
 
     def receive_message(self, client: Connection):
@@ -105,7 +109,8 @@ class ChatServer:
                     case msg if re.fullmatch(r'\\[a-zA-Z]+', msg):
                         username = msg[1:]
                         if username != client.username:
-                            receiver = self.clients_dict[username]
+                            if username in self.clients_dict:
+                                receiver = self.clients_dict[username]
                     case _:
                         if receiver:
                             msg = f'DM from {client.username}: {msg}'

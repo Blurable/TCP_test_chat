@@ -11,20 +11,16 @@ class ThreadSafeDict(UserDict):
 
     def __delitem__(self, key: Any) -> None:
         with self.lock:
-            if key in self.data:
-                super().__delitem__(key)
+            super().__delitem__(key)
 
 
     def __setitem__(self, key: Any, value: Any) -> None:
         with self.lock:
-            if key not in self.data:
-                super().__setitem__(key, value)
+            super().__setitem__(key, value)
 
 
     def __getitem__(self, key: Any) -> Any:
         with self.lock:
-            if key not in self.data:
-                return None
             return super().__getitem__(key)
 
     
@@ -40,3 +36,11 @@ class ThreadSafeDict(UserDict):
     def copy_keys(self):
         with self.lock:
             return list(self.data.keys())
+        
+
+    def add_if_not_exist(self, key, value):
+        with self.lock:
+            if key not in self.data:
+                super().__setitem__(key, value)
+                return True
+            return False
