@@ -1,47 +1,45 @@
 import threading
-from collections import UserDict
-from typing import Any
 
 
-class ThreadSafeDict(UserDict):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class ThreadSafeDict:
+    def __init__(self):
+        self.dictionary = {}
         self.lock = threading.Lock()
 
 
-    def __delitem__(self, key: Any) -> None:
+    def del_item(self, key):
         with self.lock:
-            if key in self.data:
-                super().__delitem__(key)
+            if key in self.dictionary:
+                del self.dictionary[key]
 
 
-    def __setitem__(self, key: Any, value: Any) -> None:
+    def set_item(self, key, value):
         with self.lock:
-            super().__setitem__(key, value)
+            self.dictionary[key] = value
 
 
-    def __getitem__(self, key: Any) -> Any:
+    def get_item(self, key):
         with self.lock:
-            return super().__getitem__(key)
+            return self.dictionary[key]
 
     
-    def __contains__(self, key):
+    def is_contains(self, key):
         with self.lock:
-            return super().__contains__(key)
+            return True if key in self.dictionary else False
     
     def copy_values(self):
         with self.lock:
-            return list(self.data.values())
+            return list(self.dictionary.values())
         
 
     def copy_keys(self):
         with self.lock:
-            return list(self.data.keys())
+            return list(self.dictionary.keys())
         
 
     def add_if_not_exist(self, key, value):
         with self.lock:
-            if key not in self.data:
-                super().__setitem__(key, value)
+            if key not in self.dictionary:
+                self.dictionary[key] = value
                 return True
             return False

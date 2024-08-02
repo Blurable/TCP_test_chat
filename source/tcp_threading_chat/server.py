@@ -42,7 +42,7 @@ class ChatServer:
 
 
     def authorize_client(self, client: Connection):
-        client.send("Welcome to the chat server. Please enter your username (must contain only letters): ")
+        self.send("Welcome to the chat server. Please enter your username (must contain only letters): ", client)
         while True:
             username = client.recv(self.bytesize)
             if username.isalpha() and username.lower() not in ['info', 'members', 'quit', 'all', 'username', 'you']:
@@ -50,45 +50,44 @@ class ChatServer:
                 if self.clients_dict.add_if_not_exist(username, client):
                     print(username, 'has connected to the server', client.sock)
                     break
-            client.send("Username is already in use or not valid, enter another one: ")
+            self.send("Username is already in use or not valid, enter another one: ", client)
         return client
-
     
     
     def client_cleaner(self, client):
-        del self.clients_dict[client.username]
+        self.clients_dict.del_item(client.username)
         client.close()
 
 
     def client_handler(self, client: Connection):
         try:
             client = self.authorize_client(client)
+            self.send(self.info, client)       
         except Exception as e:
-            print(f'Error {e} while authorizing the client')
-            client.close()
+            print(f'Error {e} while handling the client')
             return
-        
-        try:
-            client.send(self.info)
-        except:
-            self.client_cleaner(client)
-            return
-        
         self.broadcast_message(f"{client.username} has joined our chat! Everyone greet him!", client)     
+        
         self.receive_message(client)
+
             
+    def send(self, msg, client):
+        try:
+            client.send(msg)
+        except Exception as e:
+            print(f'Error {e} while sending a msg')
+            self.client_cleaner(client)
+
 
     def broadcast_message(self, msg: str, cur_client: Connection):
         clients = [client for client in self.clients_dict.copy_values() if client != cur_client]
+
         if not clients:
-            cur_client.send('You are alone in the chat')
-            
+            self.send('You are alone in the chat', cur_client)
         for client in clients:
-            try:
-                client.send(msg)
-            except Exception as e:
-                print(f'Error {e} while broadcasting a message')
-                self.client_cleaner(client)
+                self.send(msg, client)
+
+                
 
 
     def receive_message(self, client: Connection):
@@ -113,8 +112,12 @@ class ChatServer:
                     case _ if re.fullmatch(r'\\[a-zA-Z]+', msg):
                         username = msg[1:]
                         if username != client.username:
-                            if username in self.clients_dict:
-                                receiver = self.clients_dict[username]
+                            if self.clients_dict.is_contains(username):
+                                try:
+                                    receiver = self.clients_dict.get_item(username)
+                                except KeyError:
+                                    receiver = None
+                                    client.send('User is not in the chat')
                     case _:
                         if receiver:
                             msg = f'DM from {client.username}: {msg}'
