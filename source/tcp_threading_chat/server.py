@@ -1,19 +1,21 @@
 import socket
 import threading
 import re
-
+from tcp_threading_chat.client_connection import Connection
+from tcp_threading_chat.client_dict import ThreadSafeDict
 
 class ChatServer:
 
     def __init__(self, host_port, host_ip = socket.gethostbyname(socket.gethostname()), 
-                 encoder = 'utf-8', bytesize = 1024):
+                 encoder = 'utf-8'):
         self.host_port = host_port
         self.host_ip = host_ip
         self.encoder = encoder
-        self.bytesize = bytesize
-        self.clients_dict: dict = {}
-        self.clients_lock = threading.RLock()
-        self.choice_lock = threading.RLock()
+        self.clients_dict: ThreadSafeDict = ThreadSafeDict()
+        self.bytesize = 1024
+
+        self.info = "\n\\info for possible commands\n\\members for all chat members\n"\
+                    "\\username to switch to DMs\n\\all switch to all chat\n\\quit to quit chat"
 
         self.start_server()
 
@@ -22,7 +24,7 @@ class ChatServer:
         server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             server_socket.bind((self.host_ip, self.host_port))
-            server_socket.listen(5)
+            server_socket.listen()
             print('Server is listening...\n')
         except Exception as e:
             print(f'Error: {e} while starting the server')
@@ -32,105 +34,100 @@ class ChatServer:
             try:
                 client_socket, client_addr = server_socket.accept()
                 print(f"Accepted connection from {client_addr[0]}:{client_addr[1]}")
-                client_handler = threading.Thread(target=self.client_handler, args=(client_socket,))
-                client_handler.start()
+                client = Connection(client_socket)
+                threading.Thread(target=self.client_handler, args=(client, )).start()
             except Exception as e:
                 print(f'Error {e} while accepting the client')
                 client_socket.close()
 
 
-    def client_handler(self, client_socket):
+    def authorize_client(self, client: Connection):
+        self.send("Welcome to the chat server. Please enter your username (must contain only letters): ", client)
+        while True:
+            username = client.recv(self.bytesize)
+            if username.isalpha() and username.lower() not in ['info', 'members', 'quit', 'all', 'username', 'you']:
+                client.username = username
+                if self.clients_dict.add_if_not_exist(username, client):
+                    print(username, 'has connected to the server', client.sock)
+                    break
+            self.send("Username is already in use or not valid, enter another one: ", client)
+        return client
+    
+    
+    def client_cleaner(self, client):
+        self.clients_dict.del_item(client.username)
+        client.close()
+
+
+    def client_handler(self, client: Connection):
         try:
-            client_socket.send("Welcome to the chat server. Please enter your username (must contain only letters): ".encode(self.encoder))
-            username = client_socket.recv(self.bytesize).decode(self.encoder)
-
-            while username in self.clients_dict or not username.isalpha() or username.lower() in ['info', 'members', 'quit', 'all', 'username', 'you']:
-                client_socket.send("Username is already in use or not valid, enter another one: ".encode(self.encoder))
-                username = client_socket.recv(self.bytesize).decode(self.encoder)
-            client_socket.send("You are conneced to the chat!".encode(self.encoder))
-
-            with self.clients_lock:
-                self.clients_dict[username] = client_socket
-                client_sockets = [value for value in self.clients_dict.values()]
-
-            for socket in client_sockets:
-                if socket != client_socket:
-                    socket.send(f"{username} has joined our chat! Everyone greet him!".encode(self.encoder))
-            client_socket.send("\n\\info for possible commands\n\\members for all chat members\n"\
-                                    "\\username to switch to DMs\n\\all switch to all chat\n\\quit quit chat".encode(self.encoder))
-            
-            self.recieve_message(username)
+            client = self.authorize_client(client)
+            self.send(self.info, client)       
         except Exception as e:
             print(f'Error {e} while handling the client')
-            with self.clients_lock:
-                if username in self.clients_dict:
-                    del self.clients_dict[username]
-            client_socket.close()
+            return
+        self.broadcast_message(f"{client.username} has joined our chat! Everyone greet him!", client)     
+        
+        self.receive_message(client)
+
             
-
-    def broadcast_message(self, msg: str, client_name, reciever_name): #reciever_name = None for allchat
+    def send(self, msg, client):
         try:
-
-            with self.clients_lock:
-                client_socket = self.clients_dict[client_name]
-                reciever_socket = self.clients_dict[reciever_name]
-                clients_sockets = [value for value in self.clients_dict.values()]
-
-            client_socket.send(f'You: {msg}'.encode(self.encoder))
-
-            if reciever_socket in clients_sockets:
-                reciever_socket.send(f'{client_name}: {msg}'.encode(self.encoder))
-            elif reciever_name is None and len(clients_sockets)>1:
-                for socket in clients_sockets:
-                    if socket != client_socket:
-                        socket.send(f'{client_name}: {msg}'.encode(self.encoder))
-            elif reciever_name and reciever_name not in clients_sockets:
-                client_socket.send('User is not in the chat.'.encode(self.encoder))
-            else:
-                client_socket.send('Error occured while sending a message or you are alone in the chat.'.encode(self.encoder))
-
+            client.send(msg)
         except Exception as e:
-            print(f'Error {e} while broadcasting a message')
+            print(f'Error {e} while sending a msg')
+            self.client_cleaner(client)
 
 
-    def recieve_message(self, client_name: str):
+    def broadcast_message(self, msg: str, cur_client: Connection):
+        clients = [client for client in self.clients_dict.copy_values() if client != cur_client]
+
+        if not clients:
+            self.send('You are alone in the chat', cur_client)
+        for client in clients:
+                self.send(msg, client)
+
+                
+
+
+    def receive_message(self, client: Connection):
         try:
-            client_socket = self.clients_dict[client_name]
-            username_pattern = r'\\[a-zA-Z]+'
-            allchat_pattern = r'\\all'
-            reciever_name = None
+            receiver = None
             while True:
-                msg = client_socket.recv(self.bytesize).decode(self.encoder)
-                print(client_name + ': ' + msg)
+                msg = client.recv(self.bytesize)
+                print(client.username + ': ' + msg)
 
                 match msg.lower():
                     case '\\quit':
-                        with self.clients_lock:
-                            del self.clients_dict[client_name]
-                        print(f'{client_name} has disconnected.')
+                        print(f'{client.username} has disconnected.')
                         break
                     case '\\info':
-                        client_socket.send('\n\\info for possible commands\n\\members for all chat members\n\\username to switch to DMs\n\\all switch to all chat\n\\quit quit chat'.encode(self.encoder))
+                        client.send(self.info)
                     case '\\members':
-                        with self.clients_lock:
-                            keys_copy = list(self.clients_dict.keys())
-                        clients = '\n'
-                        for client_name in keys_copy:
-                            clients += client_name + '\n'
-                        client_socket.send(clients.encode(self.encoder))
+                        client_names = self.clients_dict.copy_keys()
+                        msg = '\n'+'\n'.join(client_names)
+                        client.send(msg)
+                    case '\\all':
+                        receiver = None
+                    case _ if re.fullmatch(r'\\[a-zA-Z]+', msg):
+                        username = msg[1:]
+                        if username != client.username:
+                            if self.clients_dict.is_contains(username):
+                                try:
+                                    receiver = self.clients_dict.get_item(username)
+                                except KeyError:
+                                    receiver = None
+                                    client.send('User is not in the chat')
                     case _:
-                        username_match = re.fullmatch(username_pattern, msg)
-                        allchat_match = re.fullmatch(allchat_pattern, msg)
-                        if allchat_match:
-                            reciever_name = None
-                        elif username_match:
-                            reciever_name = username_match.group()[1:]
+                        if receiver:
+                            msg = f'DM from {client.username}: {msg}'
+                            receiver.send(msg)
                         else:
-                            self.broadcast_message(msg, client_name, reciever_name)
+                            msg = f'{client.username}: {msg}'
+                            print(msg)            
+                            self.broadcast_message(msg, client)
+
         except Exception as e:
             print(f'Error {e} while recieving messages from client')
         finally:
-            with self.clients_lock:
-                if client_name in self.clients_dict:
-                    del self.clients_dict[client_name]
-            client_socket.close()
+            self.client_cleaner(client)
