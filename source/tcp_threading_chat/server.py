@@ -12,8 +12,8 @@ class ChatServer:
         self.host_ip = host_ip
         self.encoder = encoder
         self.clients_dict: ThreadSafeDict = ThreadSafeDict()
-        self.bytesize = 1024
         self.clients_threads_dict = {}
+        self.bytesize = 1024
 
         self.info = "\n\\info for possible commands\n\\members for all chat members\n"\
                     "\\username to switch to DMs\n\\all switch to all chat\n\\quit to quit chat"
@@ -36,7 +36,7 @@ class ChatServer:
                 client_socket, client_addr = server_socket.accept()
                 print(f"Accepted connection from {client_addr[0]}:{client_addr[1]}")
                 client = Connection(client_socket)
-                thread = threading.Thread(target=self.client_handler, args=(client, )).start()
+                thread = threading.Thread(target=self.client_handler, args=(client, )).start()               
                 self.clients_threads_dict[client] = thread
             except Exception as e:
                 print(f'Error {e} while accepting the client')
@@ -44,7 +44,7 @@ class ChatServer:
 
 
     def authorize_client(self, client: Connection):
-        self.send("Welcome to the chat server. Please enter your username (must contain only letters): ", client)
+        client.send("Welcome to the chat server. Please enter your username (must contain only letters): ")
         while True:
             username = client.recv(self.bytesize)
             if username.isalpha() and username.lower() not in ['info', 'members', 'quit', 'all', 'username', 'you']:
@@ -52,7 +52,7 @@ class ChatServer:
                 if self.clients_dict.add_if_not_exist(username, client):
                     print(username, 'has connected to the server', client.sock)
                     break
-            self.send("Username is already in use or not valid, enter another one: ", client)
+            client.send("Username is already in use or not valid, enter another one: ")
         return client
     
     
@@ -65,32 +65,30 @@ class ChatServer:
     def client_handler(self, client: Connection):
         try:
             client = self.authorize_client(client)
-            self.send(self.info, client)       
+            client.send(self.info)       
         except Exception as e:
             print(f'Error {e} while handling the client')
+            self.client_cleaner(client)
             return
         self.broadcast_message(f"{client.username} has joined our chat! Everyone greet him!", client)     
         
         self.receive_message(client)
-
-            
-    def send(self, msg, client):
-        try:
-            client.send(msg)
-        except Exception as e:
-            print(f'Error {e} while sending a msg')
-            self.client_cleaner(client)
 
 
     def broadcast_message(self, msg: str, cur_client: Connection):
         clients = [client for client in self.clients_dict.copy_values() if client != cur_client]
 
         if not clients:
-            self.send('You are alone in the chat', cur_client)
-        for client in clients:
-                self.send(msg, client)
+            try:
+                cur_client.send('You are alone in the chat')
+            except:
+                self.client_cleaner(cur_client)
 
-                
+        for client in clients:
+            try:
+                client.send(msg)
+            except Exception as e:
+                print(f'Error {e} while broadcasting a message')
 
 
     def receive_message(self, client: Connection):
@@ -120,11 +118,20 @@ class ChatServer:
                                     receiver = self.clients_dict.get_item(username)
                                 except KeyError:
                                     receiver = None
-                                    client.send('User is not in the chat')
+                                    client.send(f'User {username} has left the chat')
+                            else:
+                                client.send(f'User {username} is not in the chat')
+                        else:
+                            client.send(f"Can't message to yourself")
                     case _:
                         if receiver:
                             msg = f'DM from {client.username}: {msg}'
-                            receiver.send(msg)
+                            try:
+                                receiver.send(msg)
+                            except Exception as e:
+                                print(f'Error {e} while sending a DM')
+                                receiver = None
+                                client.send(f'User {username} has left the chat')
                         else:
                             msg = f'{client.username}: {msg}'
                             print(msg)            
