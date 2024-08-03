@@ -13,6 +13,7 @@ class ChatServer:
         self.encoder = encoder
         self.clients_dict: ThreadSafeDict = ThreadSafeDict()
         self.bytesize = 1024
+        self.clients_threads_dict = {}
 
         self.info = "\n\\info for possible commands\n\\members for all chat members\n"\
                     "\\username to switch to DMs\n\\all switch to all chat\n\\quit to quit chat"
@@ -35,7 +36,8 @@ class ChatServer:
                 client_socket, client_addr = server_socket.accept()
                 print(f"Accepted connection from {client_addr[0]}:{client_addr[1]}")
                 client = Connection(client_socket)
-                threading.Thread(target=self.client_handler, args=(client, )).start()
+                thread = threading.Thread(target=self.client_handler, args=(client, )).start()
+                self.clients_threads_dict[client] = thread
             except Exception as e:
                 print(f'Error {e} while accepting the client')
                 client_socket.close()
@@ -55,8 +57,9 @@ class ChatServer:
     
     
     def client_cleaner(self, client):
-        self.clients_dict.del_item(client.username)
-        client.close()
+        if threading.current_thread() == self.clients_threads_dict[client]:
+            self.clients_dict.del_item(client.username)
+            client.close()
 
 
     def client_handler(self, client: Connection):
