@@ -12,7 +12,6 @@ class ChatServer:
         self.host_ip = host_ip
         self.encoder = encoder
         self.clients_dict: ThreadSafeDict = ThreadSafeDict()
-        self.clients_threads_dict = {}
         self.bytesize = 1024
 
         self.info = "\n\\info for possible commands\n\\members for all chat members\n"\
@@ -36,8 +35,7 @@ class ChatServer:
                 client_socket, client_addr = server_socket.accept()
                 print(f"Accepted connection from {client_addr[0]}:{client_addr[1]}")
                 client = Connection(client_socket)
-                thread = threading.Thread(target=self.client_handler, args=(client, )).start()               
-                self.clients_threads_dict[client] = thread
+                threading.Thread(target=self.client_handler, args=(client, )).start()               
             except Exception as e:
                 print(f'Error {e} while accepting the client')
                 client_socket.close()
@@ -53,18 +51,17 @@ class ChatServer:
                     print(username, 'has connected to the server', client.sock)
                     break
             client.send("Username is already in use or not valid, enter another one: ")
-        return client
+
     
     
     def client_cleaner(self, client):
-        if threading.current_thread() == self.clients_threads_dict[client]:
-            self.clients_dict.del_item(client.username)
-            client.close()
+        self.clients_dict.del_item(client.username)
+        client.close()
 
 
     def client_handler(self, client: Connection):
         try:
-            client = self.authorize_client(client)
+            self.authorize_client(client)
             client.send(self.info)       
         except Exception as e:
             print(f'Error {e} while handling the client')
