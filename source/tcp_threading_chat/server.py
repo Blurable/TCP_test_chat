@@ -16,29 +16,32 @@ class ChatServer:
 
         self.info = "\n\\info for possible commands\n\\members for all chat members\n"\
                     "\\username to switch to DMs\n\\all switch to all chat\n\\quit to quit chat"
-
+        
+        self.stop_server_event = threading.Event()
+        self.server_socket = None
         self.start_server()
 
 
     def start_server(self):
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            server_socket.bind((self.host_ip, self.host_port))
-            server_socket.listen()
+            self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.server_socket.bind((self.host_ip, self.host_port))
+            self.server_socket.listen()
             print('Server is listening...\n')
         except Exception as e:
             print(f'Error: {e} while starting the server')
-            server_socket.close()
+            self.server_close()
 
-        while True:
+        while not self.stop_server_event.is_set():
             try:
-                client_socket, client_addr = server_socket.accept()
+                client_socket, client_addr = self.server_socket.accept()
                 print(f"Accepted connection from {client_addr[0]}:{client_addr[1]}")
                 client = Connection(client_socket)
                 threading.Thread(target=self.client_handler, args=(client, )).start()               
             except Exception as e:
                 print(f'Error {e} while accepting the client')
                 client_socket.close()
+        return
 
 
     def authorize_client(self, client: Connection):
@@ -53,7 +56,13 @@ class ChatServer:
             client.send("Username is already in use or not valid, enter another one: ")
 
     
-    
+    def server_close(self):
+        if self.server_socket:
+            self.server_socket.close()
+            self.stop_server_event.set()
+            print('Server closed')   
+
+
     def client_cleaner(self, client):
         self.clients_dict.del_item(client.username)
         client.close()
@@ -96,6 +105,8 @@ class ChatServer:
                 print(client.username + ': ' + msg)
 
                 match msg.lower():
+                    case 'close_server':
+                        self.server_close()
                     case '\\quit':
                         print(f'{client.username} has disconnected.')
                         break
@@ -130,8 +141,7 @@ class ChatServer:
                                 receiver = None
                                 client.send(f'User {username} has left the chat')
                         else:
-                            msg = f'{client.username}: {msg}'
-                            print(msg)            
+                            msg = f'{client.username}: {msg}'           
                             self.broadcast_message(msg, client)
 
         except Exception as e:
