@@ -31,7 +31,6 @@ class ChatServer:
         except Exception as e:
             print(f'Error: {e} while starting the server')
             self.server_close()
-
         while not self.stop_server_event.is_set():
             try:
                 client_socket, client_addr = self.server_socket.accept()
@@ -83,13 +82,6 @@ class ChatServer:
 
     def broadcast_message(self, msg: str, cur_client: Connection):
         clients = [client for client in self.clients_dict.copy_values() if client != cur_client]
-
-        if not clients:
-            try:
-                cur_client.send('You are alone in the chat')
-            except:
-                self.client_cleaner(cur_client)
-
         for client in clients:
             try:
                 client.send(msg)
@@ -101,7 +93,10 @@ class ChatServer:
         try:
             receiver = None
             while True:
-                msg = client.recv(self.bytesize)
+                try:
+                    msg = client.recv(self.bytesize)
+                except socket.error:
+                    print(f'{client} socket was closed.')
                 print(client.username + ': ' + msg)
 
                 match msg.lower():
