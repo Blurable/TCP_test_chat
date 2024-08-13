@@ -97,6 +97,7 @@ class ChatServer:
                     msg = client.recv(self.bytesize)
                 except socket.error:
                     print(f'{client} socket was closed.')
+                    break
                 print(client.username + ': ' + msg)
 
                 match msg.lower():
@@ -119,6 +120,7 @@ class ChatServer:
                             if self.clients_dict.is_contains(username):
                                 try:
                                     receiver = self.clients_dict.get_item(username)
+                                    client.send(f'Switched to DM with {username}')
                                 except KeyError:
                                     receiver = None
                                     client.send(f'User {username} has left the chat')

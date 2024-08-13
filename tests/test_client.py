@@ -23,8 +23,7 @@ class TestClient:
     def test_connect_to_server(self):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            self.client_socket.connect((self.server_host_ip, self.server_host_port))
-            print('You have connected to the chat!')            
+            self.client_socket.connect((self.server_host_ip, self.server_host_port))           
         except Exception as e:
             print(f'Error {e} while connecting to server')
         self.test_snd_rcv()
@@ -40,18 +39,19 @@ class TestClient:
         assert rec == self.rcv[1]
         print(f'\033[31m{rec}\033[0m')
         names = ['Art', 'Bob', 'Bah', 'Vlad', 'Diman']
-        time.sleep(20)
+        time.sleep(35)
         rec = self.client_socket.recv(self.bytesize)
         print(f'\033[31m{rec}\033[0m')
-        self.client_socket.close()
-        # self.client_socket.send('\\members'.encode(self.encoder))
-        # rec = self.client_socket.recv(self.bytesize).decode(self.encoder)
-        # print('\033[31m'+rec+"\033[0m")
-        # assert rec == ['Baho'] + names
+        self.client_socket.send('\\members'.encode(self.encoder))
+        rec = self.client_socket.recv(self.bytesize).decode(self.encoder)
+        print('\033[31m'+rec+"\033[0m")
+        assert rec == '\n' + '\n'.join(['Baho'] + names)
+        self.client_socket.send('\\Art'.encode(self.encoder))
+        rec = self.client_socket.recv(self.bytesize).decode(self.encoder)
+        assert rec == 'Switched to DM with Art'
+        self.client_socket.send('Hello'.encode(self.encoder))
 
         
-            
-
 def run_client(name):
     client = Client(54321)
     time.sleep(1)
@@ -69,8 +69,9 @@ def test_clients_broadcast():
     time.sleep(6)
     for i in range(5):
         names = ['Art', 'Bob', 'Bah', 'Vlad', 'Diman']
-        threading.Thread(target=run_client, args=(names[i], )).start()
-        time.sleep(2)
+        run_client(names[i])
+    
+    
     
 test_clients_broadcast()
 

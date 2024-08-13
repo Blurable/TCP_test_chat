@@ -1,6 +1,5 @@
 import socket
 import threading
-from time import sleep
 
 
 class Client:
@@ -19,8 +18,7 @@ class Client:
     def connect_to_server(self):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            self.client_socket.connect((self.server_host_ip, self.server_host_port))
-            print('You have connected to the chat!')            
+            self.client_socket.connect((self.server_host_ip, self.server_host_port))          
         except Exception as e:
             print(f'Error {e} while connecting to server')
         recieve_messages = threading.Thread(target=self.recieve_messages)
