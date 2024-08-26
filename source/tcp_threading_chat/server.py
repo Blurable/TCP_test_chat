@@ -6,11 +6,9 @@ from tcp_threading_chat.client_dict import ThreadSafeDict
 
 class ChatServer:
 
-    def __init__(self, host_port, host_ip = socket.gethostbyname(socket.gethostname()), 
-                 encoder = 'utf-8'):
+    def __init__(self, host_port, host_ip = socket.gethostbyname(socket.gethostname())):
         self.host_port = host_port
         self.host_ip = host_ip
-        self.encoder = encoder
         self.clients_dict: ThreadSafeDict = ThreadSafeDict()
         self.bytesize = 1024
 
@@ -47,6 +45,9 @@ class ChatServer:
         client.send("Welcome to the chat server. Please enter your username (must contain only letters): ")
         while True:
             username = client.recv(self.bytesize)
+            if len(username) == 0:
+                print('Client has disconnected while entering username')
+                raise socket.error
             if username.isalpha() and username.lower() not in ['info', 'members', 'quit', 'all', 'username', 'you']:
                 client.username = username
                 if self.clients_dict.add_if_not_exist(username, client):
@@ -93,10 +94,9 @@ class ChatServer:
         try:
             receiver = None
             while True:
-                try:
-                    msg = client.recv(self.bytesize)
-                except socket.error:
-                    print(f'{client} socket was closed.')
+                msg = client.recv(self.bytesize)
+                if len(msg.encode('utf-8')) == 0:
+                    print(f'{client.sock} socket was closed.')
                     break
                 print(client.username + ': ' + msg)
 

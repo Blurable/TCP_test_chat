@@ -17,8 +17,6 @@ class Connection:
 
     def recv(self, bytesize):
         msg = self.sock.recv(bytesize).decode(self.encoder)
-        if len(msg) == 0:
-            raise socket.error
         return msg
     
 

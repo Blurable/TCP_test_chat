@@ -2,10 +2,9 @@ import pytest
 import time
 import threading
 import socket
-from unittest.mock import Mock, patch
 from tcp_threading_chat.server import ChatServer
 from tcp_threading_chat.client import Client
-
+ 
 
 class TestClient:
     def __init__(self, server_host_port, snd, rcv, server_host_ip = socket.gethostbyname(socket.gethostname()), 
@@ -39,7 +38,7 @@ class TestClient:
         assert rec == self.rcv[1]
         print(f'\033[31m{rec}\033[0m')
         names = ['Art', 'Bob', 'Bah', 'Vlad', 'Diman']
-        time.sleep(35)
+        time.sleep(20)
         rec = self.client_socket.recv(self.bytesize)
         print(f'\033[31m{rec}\033[0m')
         self.client_socket.send('\\members'.encode(self.encoder))
@@ -50,12 +49,14 @@ class TestClient:
         rec = self.client_socket.recv(self.bytesize).decode(self.encoder)
         assert rec == 'Switched to DM with Art'
         self.client_socket.send('Hello'.encode(self.encoder))
+        self.client_socket.shutdown(socket.SHUT_RDWR)
+        self.client_socket.close()
 
         
 def run_client(name):
     client = Client(54321)
     time.sleep(1)
-    client.client_socket.send(name.encode(client.encoder))
+    client.client.send(name)
 
 
 def run_test_client(snd, rcv):
@@ -63,7 +64,7 @@ def run_test_client(snd, rcv):
 
 
 def test_clients_broadcast():
-    th1 = threading.Thread(target=run_test_client, args=(['Baho'], ["Welcome to the chat server."\
+    threading.Thread(target=run_test_client, args=(['Baho'], ["Welcome to the chat server."\
                     " Please enter your username (must contain only letters): ", "\n\\info for possible commands\n\\members for all chat members\n"\
                     "\\username to switch to DMs\n\\all switch to all chat\n\\quit to quit chat"],)).start()
     time.sleep(6)

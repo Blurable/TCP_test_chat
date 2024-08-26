@@ -1,6 +1,8 @@
 test.py
 testt2.py
 test3.py
+client_test.py
+server_test.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
