@@ -1,41 +1,59 @@
-class MsgProtocol:
+import struct
 
-    def __init__(self, chat_commands: list, encoder: str = 'utf-8', bytesize: int = 1024):
-        self.chat_command_map: dict = {command: i for i, command in enumerate(chat_commands)}
-        self.encoder = encoder
-        self.bytesize = bytesize
+class MsgProtocol:
+    #0 stands for non command messages
+    chat_commands_map = {
+        '\\quit' : 1,  # disconnect
+        '\\members' : 2,  #list of members
+        '\\info' : 3,  #list of commands
+        '\\all' : 4  #switch to allchat
+    }
+
+    def __init__(self):
+        self.encoder: str = 'utf-8'
+        self.bytesize: int = 1024
+        self.max_length: int = 2048
 
 
     def encode(self, msg: str) -> bytes:
+        return msg.encode(self.encoder)
 
-        if msg in self.chat_command_map:
-            encoded_msg = self.chat_command_map[msg].to_bytes(1, byteorder='big')
-            return encoded_msg
-        encoded_msg = (0).to_bytes(1, byteorder='big')
-        
+
+    def pack(self, msg: str) -> bytes:
+        length = len(self.encode(msg))
+        if length > self.max_length:
+            print('msg is too big')
+            return None
+        command_id = 0
+        if msg.lower() in MsgProtocol.chat_commands_map:
+            command_id = MsgProtocol.chat_commands_map[msg]
+            try:
+                return struct.pack('!BI', command_id, length)
+            except Exception as e:
+                print(f'Error {e} while packing command_id')
+
         try:
-            msg_length = len(msg)
-            msg_byte_length = msg_length.to_bytes(4, byteorder='big')
-            encoded_msg += msg_byte_length
-        except OverflowError:
-            print('message is too big')
-
-        encoded_msg += msg.encode(self.encoder)      
+            return struct.pack('!BI', command_id, length) + self.encode(msg)
+        except Exception as e:
+            print(f'Error {e} while packing')
+            return None
         
-        return encoded_msg
-    
 
-    def decode_command(self, command_id: bytes) -> str:
-        command_id = int.from_bytes(command_id, byteorder='big')
-        for key, val in self.chat_command_map:
+    def unpack(self, msg: bytes) -> tuple:
+        try:
+            command_id, msg_length = struct.unpack('!BI', msg)
+            return command_id, msg_length
+        except Exception as e:
+            print(f'Error {e} while unpacking')
+            return None
+
+
+    def decode_command(self, command_id: int) -> str:
+        for key, val in MsgProtocol.chat_commands_map.items():
             if val == command_id:
                 return key
+        raise ValueError
     
 
-    def decode_length(self, length: bytes) -> int:
-        length = int.from_bytes(length, bytetsize='big')
-        return length
-
-
-    def decode_msg(self, msg: bytes) -> str:
+    def decode(self, msg: bytes) -> str:
         return msg.decode(self.encoder)

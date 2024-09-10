@@ -4,16 +4,16 @@ import re
 from tcp_threading_chat.client_connection import Connection
 from tcp_threading_chat.client_dict import ThreadSafeDict
 
+
 class ChatServer:
 
     def __init__(self, host_port, host_ip = socket.gethostbyname(socket.gethostname())):
         self.host_port = host_port
         self.host_ip = host_ip
         self.clients_dict: ThreadSafeDict = ThreadSafeDict()
-        self.bytesize = 1024
 
-        self.info = "\n\\info for possible commands\n\\members for all chat members\n"\
-                    "\\username to switch to DMs\n\\all switch to all chat\n\\quit to quit chat"
+        self.info = ("\n\\info for possible commands\n\\members for all chat members\n"\
+                    "\\username to switch to DMs\n\\all switch to all chat\n\\quit to quit chat")
         
         self.stop_server_event = threading.Event()
         self.server_socket = None
@@ -41,8 +41,16 @@ class ChatServer:
         return
 
 
+    def server_close(self):
+        if self.server_socket:
+            self.server_socket.close()
+            self.stop_server_event.set()
+            print('Server closed')   
+
+
     def authorize_client(self, client: Connection):
-        client.send("Welcome to the chat server. Please enter your username (must contain only letters): ")
+        greetings = client.send("Welcome to the chat server. Please enter your username (must contain only letters): ")
+        client.send(greetings)
         while True:
             username = client.recv(self.bytesize)
             if len(username) == 0:
@@ -53,14 +61,8 @@ class ChatServer:
                 if self.clients_dict.add_if_not_exist(username, client):
                     print(username, 'has connected to the server', client.sock)
                     break
-            client.send("Username is already in use or not valid, enter another one: ")
-
-    
-    def server_close(self):
-        if self.server_socket:
-            self.server_socket.close()
-            self.stop_server_event.set()
-            print('Server closed')   
+            not_valid = "Username is already in use or not valid, enter another one: "
+            client.send(not_valid)
 
 
     def client_cleaner(self, client):
@@ -82,6 +84,7 @@ class ChatServer:
 
 
     def broadcast_message(self, msg: str, cur_client: Connection):
+        msg = cur_client.encode(msg)
         clients = [client for client in self.clients_dict.copy_values() if client != cur_client]
         for client in clients:
             try:
@@ -94,8 +97,9 @@ class ChatServer:
         try:
             receiver = None
             while True:
-                msg = client.recv(self.bytesize)
-                if len(msg.encode('utf-8')) == 0:
+                try:
+                    msg = client.recv()
+                except Exception:
                     print(f'{client.sock} socket was closed.')
                     break
                 print(client.username + ': ' + msg)
