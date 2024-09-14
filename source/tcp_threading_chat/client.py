@@ -1,6 +1,6 @@
 import socket
 import threading
-from tcp_threading_chat.client_connection import Connection
+from tcp_threading_chat.communication_manager import CommunicationManager
 
 
 class Client:
@@ -10,41 +10,37 @@ class Client:
         self.server_host_ip = server_host_ip
         self.stop_event = threading.Event()
         self.close_client_lock = threading.Lock()
-        self.connect_to_server()
+        self.server = None
 
 
     def connect_to_server(self):
-        server = Connection(socket.socket(socket.AF_INET, socket.SOCK_STREAM))
+        self.server = CommunicationManager(socket.socket(socket.AF_INET, socket.SOCK_STREAM))
         try:
-            server.sock.connect((self.server_host_ip, self.server_host_port))          
+            self.server.sock.connect((self.server_host_ip, self.server_host_port))          
         except Exception as e:
             print(f'Error {e} while connecting to server')
-        threading.Thread(target=self.recieve_messages, args=(server,)).start()
-        threading.Thread(target=self.broadcast, args=(server,)).start()
+
+        threading.Thread(target=self.receive_messages).start()
+        threading.Thread(target=self.broadcast).start()
     
 
-    def close_connection(self, server):
+    def close_connection(self):
         with self.close_client_lock:
             if not self.stop_event.is_set():
                 self.stop_event.set()
-                server.sock.shutdown(socket.SHUT_WR)
                 try:
-                    while True:
-                        msg = server.recv()
-                        if len(msg) == 0:
-                            raise socket.error
-                        print(msg)
+                    self.server.sock.shutdown(socket.SHUT_RDWR)
                 except Exception as e:
-                    print('Connection closed.', e)
-                    server.sock.shutdown(socket.SHUT_RD)
-                    server.close()
+                    print(f'Error {e} while shutting down.')
+                finally:
+                    self.server.close()
 
 
-    def broadcast(self, server):
+    def broadcast(self):
         try:
             while not self.stop_event.is_set():
                 msg = input('You: ')
-                server.send(msg)
+                self.server.send(msg)
                 if msg.lower() == '\\quit':
                     print('Quitting chat...')
                     break
@@ -52,22 +48,21 @@ class Client:
             if not self.stop_event.is_set():
                 print(f'Error {e} while broadcasting.')
         finally:
-            self.close_connection(server)
+            self.close_connection()
             
 
-    def recieve_messages(self, server):
+    def receive_messages(self):
         try:
             while not self.stop_event.is_set():
-                print(dir(server))
-                msg = server.recv()
-                if msg:
-                    print(msg)
+                msg = self.server.recv()
+                print(msg)
         except Exception as e:
             if not self.stop_event.is_set():
                 print(f'Error {e} while recieving messages')
         finally:
-            self.close_connection(server)
+            self.close_connection()
 
 
 if __name__ == '__main__':
     chat_server = Client(54321)
+    chat_server.connect_to_server()
