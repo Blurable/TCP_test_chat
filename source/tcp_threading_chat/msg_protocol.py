@@ -9,6 +9,7 @@ class MsgProtocol:
         '\\all' : 4  #switch to allchat
     }
 
+
     def __init__(self):
         self.encoder: str = 'utf-8'
         self.bytesize: int = 1024
