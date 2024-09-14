@@ -1,7 +1,7 @@
 import socket
 import threading
 import re
-from tcp_threading_chat.client_connection import Connection
+from tcp_threading_chat.communication_manager import CommunicationManager
 from tcp_threading_chat.client_dict import ThreadSafeDict
 
 
@@ -17,7 +17,6 @@ class ChatServer:
         
         self.stop_server_event = threading.Event()
         self.server_socket = None
-        self.start_server()
 
 
     def start_server(self):
@@ -33,7 +32,7 @@ class ChatServer:
             try:
                 client_socket, client_addr = self.server_socket.accept()
                 print(f"Accepted connection from {client_addr[0]}:{client_addr[1]}")
-                client = Connection(client_socket)
+                client = CommunicationManager(client_socket)
                 threading.Thread(target=self.client_handler, args=(client, )).start()               
             except Exception as e:
                 print(f'Error {e} while accepting the client')
@@ -48,14 +47,11 @@ class ChatServer:
             print('Server closed')   
 
 
-    def authorize_client(self, client: Connection):
-        greetings = client.send("Welcome to the chat server. Please enter your username (must contain only letters): ")
+    def authorize_client(self, client: CommunicationManager):
+        greetings = "Welcome to the chat server. Please enter your username (must contain only letters): "
         client.send(greetings)
         while True:
-            username = client.recv(self.bytesize)
-            if len(username) == 0:
-                print('Client has disconnected while entering username')
-                raise socket.error
+            username = client.recv()
             if username.isalpha() and username.lower() not in ['info', 'members', 'quit', 'all', 'username', 'you']:
                 client.username = username
                 if self.clients_dict.add_if_not_exist(username, client):
@@ -70,7 +66,7 @@ class ChatServer:
         client.close()
 
 
-    def client_handler(self, client: Connection):
+    def client_handler(self, client: CommunicationManager):
         try:
             self.authorize_client(client)
             client.send(self.info)       
@@ -83,7 +79,7 @@ class ChatServer:
         self.receive_message(client)
 
 
-    def broadcast_message(self, msg: str, cur_client: Connection):
+    def broadcast_message(self, msg: str, cur_client: CommunicationManager):
         msg = cur_client.encode(msg)
         clients = [client for client in self.clients_dict.copy_values() if client != cur_client]
         for client in clients:
@@ -93,7 +89,7 @@ class ChatServer:
                 print(f'Error {e} while broadcasting a message')
 
 
-    def receive_message(self, client: Connection):
+    def receive_message(self, client: CommunicationManager):
         try:
             receiver = None
             while True:

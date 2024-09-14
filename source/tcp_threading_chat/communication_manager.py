@@ -1,14 +1,16 @@
 import socket
 import threading
 from tcp_threading_chat.msg_protocol import MsgProtocol
+from tcp_threading_chat.msg_storage import Storage
 
-class Connection:
+class CommunicationManager:
     def __init__(self, sock: socket.socket):
         self.sock = sock
         self.username = ''
         self.sendlock = threading.Lock()
         self.recvlock = threading.Lock()
         self.protocol = MsgProtocol()
+        self.storage = Storage()
         
 
     def encode(self, msg):
@@ -17,9 +19,9 @@ class Connection:
 
     def send(self, msg):
         if type(msg) != bytes:
-            encoded_msg = self.encode(msg)
+            msg = self.encode(msg)
         with self.sendlock:
-            self.sock.sendall(encoded_msg)
+            self.sock.sendall(msg)
 
     
     def recv(self):
@@ -40,12 +42,15 @@ class Connection:
             msg = self.sock_recv(min(self.protocol.bytesize, msg_length))
             final_msg += msg
             bytes_received += len(msg)
-        return self.protocol.decode(final_msg)
+        final_msg = self.protocol.decode(final_msg)
+        self.storage.put(final_msg)
+        return final_msg
     
 
     def sock_recv(self, bytesize):
         msg = self.sock.recv(bytesize)
         if len(msg) == 0:
+            print('socket closed')
             raise socket.error
         return msg
 
